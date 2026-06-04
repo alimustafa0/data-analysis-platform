@@ -1,0 +1,4 @@
+-r base.txt
+
+# Production-only packages arrive here in Phase 7
+# (gunicorn, whitenoise, etc.)
