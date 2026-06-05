@@ -9,6 +9,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 from django.utils import timezone
+from django.conf import settings
 
 from .forms import DatasetUploadForm
 from .models import AnalysisPipeline, AnalysisResult, Dataset, PipelineStep
@@ -325,11 +326,25 @@ def pipeline_status(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
     pipeline = get_object_or_404(AnalysisPipeline, pk=pk)
     steps = pipeline.steps.all()
 
-    # Auto-refresh if still running.
     auto_refresh = pipeline.status in (
         AnalysisPipeline.Status.PENDING,
         AnalysisPipeline.Status.RUNNING,
     )
+
+    # Extract feature importance for the Plotly chart.
+    model_step = steps.filter(
+        step_type=PipelineStep.StepType.MODEL_TRAINING,
+        status=PipelineStep.Status.COMPLETED,
+    ).first()
+
+    feature_importance: list[dict] = []
+    model_metrics: dict = {}
+    cv_result: dict = {}
+
+    if model_step and model_step.result:
+        feature_importance = model_step.result.get("feature_importance", [])
+        model_metrics = model_step.result.get("metrics", {})
+        cv_result = model_step.result.get("cross_validation", {})
 
     return render(
         request,
@@ -338,5 +353,45 @@ def pipeline_status(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
             "pipeline": pipeline,
             "steps": steps,
             "auto_refresh": auto_refresh,
+            "feature_importance": feature_importance,
+            "model_metrics": model_metrics,
+            "cv_result": cv_result,
+            "has_model": model_step is not None,
         },
+    )
+
+@require_http_methods(["GET"])
+def model_download(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
+    """
+    Stream the trained model .joblib file as a download.
+
+    The file path is stored in the completed MODEL_TRAINING step's result
+    dict — we never construct paths from user input directly.
+    """
+    from django.http import FileResponse
+
+    pipeline = get_object_or_404(AnalysisPipeline, pk=pk)
+
+    step = pipeline.steps.filter(
+        step_type=PipelineStep.StepType.MODEL_TRAINING,
+        status=PipelineStep.Status.COMPLETED,
+    ).first()
+
+    if not step or not step.result.get("model_file"):
+        from django.http import Http404
+        raise Http404("No trained model found for this pipeline.")
+
+    model_path = Path(settings.MEDIA_ROOT) / step.result["model_file"]
+
+    if not model_path.exists():
+        from django.http import Http404
+        raise Http404("Model file not found on disk.")
+
+    stem = Path(pipeline.dataset.original_filename).stem
+    filename = f"model_{stem}_{step.result.get('model', 'model')}.joblib"
+
+    return FileResponse(
+        open(model_path, "rb"),
+        as_attachment=True,
+        filename=filename,
     )

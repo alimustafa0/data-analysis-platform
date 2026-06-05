@@ -1,6 +1,13 @@
 {% extends "base.html" %}
+{% load analysis_tags %}
 
 {% block title %}Pipeline Results — {{ pipeline.dataset.original_filename }}{% endblock %}
+
+{% block extra_head %}
+{% if has_model and feature_importance %}
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+{% endif %}
+{% endblock %}
 
 {% block content %}
 
@@ -241,25 +248,15 @@
     </div>
     {% endif %}
 
-    {# Feature importance #}
+    {# Feature importance — rendered as Plotly chart via extra_body #}
     {% if step.result.feature_importance %}
-    <div>
+    <div class="mt-4">
         <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
-            Top Feature Importances
+            Feature Importance (top {{ step.result.feature_importance|length }})
         </p>
-        <div class="space-y-1.5">
-            {% for fi in step.result.feature_importance|slice:":10" %}
-            <div class="flex items-center gap-3">
-                <span class="w-32 truncate text-right text-xs text-gray-400">{{ fi.feature }}</span>
-                <div class="flex-1 rounded-full bg-gray-800 h-2">
-                    <div class="rounded-full bg-indigo-500 h-2"
-                         style="width: {{ fi.importance|floatformat:4 }}%"></div>
-                </div>
-                <span class="w-12 text-right text-xs text-gray-500">{{ fi.importance }}</span>
-            </div>
-            {% endfor %}
-        </div>
+        <div id="feature-importance-chart" style="height: 320px;"></div>
     </div>
+    {% endif %}
     {% endif %}
     {% endif %}
     {% endif %}
@@ -268,17 +265,71 @@
 {% endfor %}
 </div>
 
-{% if pipeline.status == 'completed' and pipeline.processed_file %}
-<div class="mt-6 rounded-xl border border-gray-800 bg-gray-900 px-6 py-4 flex items-center justify-between">
-    <div>
-        <p class="text-sm font-semibold text-white">Processed Dataset</p>
-        <p class="text-xs text-gray-500 mt-0.5">Cleaned and transformed — ready to download.</p>
+{% if pipeline.status == 'completed' %}
+<div class="mt-6 rounded-xl border border-gray-800 bg-gray-900 px-6 py-5">
+    <p class="mb-4 text-sm font-semibold text-white">Pipeline Outputs</p>
+    <div class="flex flex-wrap gap-3">
+
+        {% if pipeline.processed_file %}
+        <a href="{{ pipeline.processed_file.url }}"
+           class="inline-flex items-center gap-2 rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700 transition">
+            <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Download Processed Dataset (.csv)
+        </a>
+        {% endif %}
+
+        {% if has_model %}
+        <a href="{% url 'analysis:model_download' pk=pipeline.pk %}"
+           class="inline-flex items-center gap-2 rounded-lg bg-indigo-800/60 border border-indigo-700/50 px-4 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-700/60 transition">
+            <svg class="h-4 w-4 text-indigo-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            Download Trained Model (.joblib)
+        </a>
+        {% endif %}
+
     </div>
-    <a href="{{ pipeline.processed_file.url }}"
-       class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition">
-        Download CSV
-    </a>
 </div>
 {% endif %}
 
+{% endblock %}
+
+{% block extra_body %}
+{% if has_model and feature_importance %}
+{{ feature_importance|json_script:"fi-data" }}
+<script>
+(function () {
+    "use strict";
+
+    const fi = JSON.parse(document.getElementById("fi-data").textContent);
+    if (!fi || !fi.length) return;
+
+    const features    = fi.map(function (d) { return d.feature; }).reverse();
+    const importances = fi.map(function (d) { return d.importance; }).reverse();
+
+    Plotly.newPlot(
+        "feature-importance-chart",
+        [{
+            type:        "bar",
+            orientation: "h",
+            x:           importances,
+            y:           features,
+            marker:      { color: "#6366f1", opacity: 0.85 },
+            hovertemplate: "<b>%{y}</b><br>Importance: %{x:.4f}<extra></extra>",
+        }],
+        {
+            paper_bgcolor: "transparent",
+            plot_bgcolor:  "transparent",
+            font:  { color: "#9ca3af", size: 12 },
+            xaxis: { gridcolor: "#1f2937", color: "#6b7280", title: { text: "Importance", font: { color: "#6b7280" } } },
+            yaxis: { automargin: true, color: "#9ca3af" },
+            margin: { l: 10, r: 20, t: 10, b: 40 },
+        },
+        { responsive: true, displayModeBar: false }
+    );
+})();
+</script>
+{% endif %}
 {% endblock %}
