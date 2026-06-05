@@ -31,3 +31,5 @@ celerybeat.pid
 
 # Node / Tailwind (Phase 6)
 node_modules/
+
+tailwindcss.exe
