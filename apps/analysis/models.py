@@ -105,3 +105,66 @@ class Dataset(models.Model):
     def has_failed(self) -> bool:
         """True when processing failed and an error message is available."""
         return self.status == self.Status.FAILED
+    
+
+class AnalysisResult(models.Model):
+    """
+    Stores the computed analysis for one Dataset.
+
+    Keeping results in the database means the UI renders instantly on
+    revisit — no recomputation. The heavy JSON fields use PostgreSQL
+    JSONB in production (fast, indexable) and SQLite JSON in development.
+    """
+
+    dataset: models.OneToOneField = models.OneToOneField(
+        Dataset,
+        on_delete=models.CASCADE,
+        related_name="result",
+        primary_key=True,
+    )
+
+    # ── Shape ──────────────────────────────────────────────────────────────────
+    row_count: models.PositiveIntegerField = models.PositiveIntegerField()
+    column_count: models.PositiveIntegerField = models.PositiveIntegerField()
+    column_names: models.JSONField = models.JSONField(
+        help_text=_("Ordered list of column names.")
+    )
+    dtypes: models.JSONField = models.JSONField(
+        help_text=_("Mapping of column name → inferred dtype string.")
+    )
+
+    # ── Quality ────────────────────────────────────────────────────────────────
+    missing_counts: models.JSONField = models.JSONField(
+        help_text=_("Mapping of column name → missing value count.")
+    )
+    missing_pct: models.JSONField = models.JSONField(
+        help_text=_("Mapping of column name → missing value percentage.")
+    )
+    duplicate_row_count: models.PositiveIntegerField = models.PositiveIntegerField(
+        default=0
+    )
+
+    # ── Statistics ─────────────────────────────────────────────────────────────
+    numeric_stats: models.JSONField = models.JSONField(
+        help_text=_("Descriptive stats for numeric columns (mean, std, quartiles…).")
+    )
+    categorical_stats: models.JSONField = models.JSONField(
+        help_text=_("Value counts and cardinality for categorical columns.")
+    )
+    correlation_matrix: models.JSONField = models.JSONField(
+        help_text=_("Pearson correlation matrix for numeric columns.")
+    )
+
+    # ── Sample ─────────────────────────────────────────────────────────────────
+    sample_rows: models.JSONField = models.JSONField(
+        help_text=_("First 10 rows as a list of dicts for the preview table.")
+    )
+
+    computed_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = _("Analysis Result")
+        verbose_name_plural = _("Analysis Results")
+
+    def __str__(self) -> str:
+        return f"Result for {self.dataset.original_filename}"
