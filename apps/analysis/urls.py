@@ -7,5 +7,7 @@ from . import views
 app_name: str = "analysis"
 
 urlpatterns = [
+    path("", views.dataset_list, name="list"),
     path("upload/", views.upload, name="upload"),
+    path("<uuid:pk>/", views.result, name="result"),
 ]

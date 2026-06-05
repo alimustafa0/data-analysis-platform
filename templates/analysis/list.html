@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}History — Data Analysis Platform{% endblock %}
+
+{% block content %}
+<div class="mb-8 flex items-center justify-between">
+    <div>
+        <h1 class="text-2xl font-bold text-white">Dataset History</h1>
+        <p class="mt-1 text-sm text-gray-500">
+            {{ datasets.count }} dataset{{ datasets.count|pluralize }} uploaded
+        </p>
+    </div>
+    <a href="{% url 'analysis:upload' %}"
+       class="rounded-xl bg-indigo-600 px-5 py-2 text-sm font-semibold text-white shadow-lg hover:bg-indigo-500 transition">
+        + Upload New
+    </a>
+</div>
+
+{% if not datasets %}
+{# ── Empty state ───────────────────────────────────────────────────────────── #}
+<div class="rounded-xl border border-gray-800 bg-gray-900 px-6 py-20 text-center">
+    <p class="text-lg font-semibold text-white">No datasets yet</p>
+    <p class="mt-2 text-sm text-gray-500">Upload your first dataset to get started.</p>
+    <a href="{% url 'analysis:upload' %}"
+       class="mt-6 inline-block rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition">
+        Upload a Dataset
+    </a>
+</div>
+
+{% else %}
+{# ── Dataset table ─────────────────────────────────────────────────────────── #}
+<div class="overflow-hidden rounded-xl border border-gray-800 bg-gray-900">
+    <table class="w-full text-sm">
+        <thead>
+            <tr class="border-b border-gray-800">
+                <th class="px-6 py-3 text-left font-medium text-gray-400">File</th>
+                <th class="px-6 py-3 text-left font-medium text-gray-400">Status</th>
+                <th class="px-6 py-3 text-right font-medium text-gray-400">Rows</th>
+                <th class="px-6 py-3 text-right font-medium text-gray-400">Columns</th>
+                <th class="px-6 py-3 text-left font-medium text-gray-400">Uploaded</th>
+                <th class="px-6 py-3"></th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+            {% for ds in datasets %}
+            <tr class="transition hover:bg-gray-800/40">
+
+                {# Filename #}
+                <td class="max-w-xs truncate px-6 py-4 font-medium text-gray-200">
+                    {{ ds.original_filename }}
+                </td>
+
+                {# Status badge #}
+                <td class="px-6 py-4">
+                    {% if ds.status == "ready" %}
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-900/50 px-2.5 py-0.5 text-xs font-semibold text-emerald-400 ring-1 ring-emerald-700">
+                        <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Ready
+                    </span>
+                    {% elif ds.status == "processing" %}
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-900/50 px-2.5 py-0.5 text-xs font-semibold text-amber-400 ring-1 ring-amber-700">
+                        <span class="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>Processing
+                    </span>
+                    {% elif ds.status == "failed" %}
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-2.5 py-0.5 text-xs font-semibold text-red-400 ring-1 ring-red-700">
+                        <span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>Failed
+                    </span>
+                    {% else %}
+                    <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-800 px-2.5 py-0.5 text-xs font-semibold text-gray-400 ring-1 ring-gray-700">
+                        Queued
+                    </span>
+                    {% endif %}
+                </td>
+
+                {# Row / column counts #}
+                <td class="px-6 py-4 text-right text-gray-400">
+                    {{ ds.row_count|default:"—" }}
+                </td>
+                <td class="px-6 py-4 text-right text-gray-400">
+                    {{ ds.column_count|default:"—" }}
+                </td>
+
+                {# Timestamp #}
+                <td class="px-6 py-4 text-gray-500">
+                    {{ ds.created_at|date:"N j, Y · g:i A" }}
+                </td>
+
+                {# Action #}
+                <td class="px-6 py-4 text-right">
+                    {% if ds.status == "ready" %}
+                    <a href="{% url 'analysis:result' pk=ds.pk %}"
+                       class="text-sm font-medium text-indigo-400 hover:text-indigo-300 transition">
+                        View →
+                    </a>
+                    {% elif ds.status == "failed" %}
+                    <span class="text-sm text-red-500">Failed</span>
+                    {% else %}
+                    <span class="text-sm text-gray-600">Pending…</span>
+                    {% endif %}
+                </td>
+
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+{% endblock %}

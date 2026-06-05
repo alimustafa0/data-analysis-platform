@@ -17,10 +17,23 @@
 <body class="h-full text-gray-100 antialiased">
 
     <!-- Global navigation placeholder — replaced in Phase 6 UI step -->
-    <header class="border-b border-gray-800 px-6 py-4">
-        <span class="text-sm font-semibold tracking-widest text-indigo-400 uppercase">
-            Data Analysis Platform
-        </span>
+    <header class="border-b border-gray-800">
+        <nav class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+            <a href="{% url 'core:home' %}"
+            class="text-sm font-semibold uppercase tracking-widest text-indigo-400 hover:text-indigo-300 transition">
+                Data Analysis Platform
+            </a>
+            <div class="flex items-center gap-6">
+                <a href="{% url 'analysis:list' %}"
+                class="text-sm text-gray-400 hover:text-white transition">
+                    History
+                </a>
+                <a href="{% url 'analysis:upload' %}"
+                class="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-indigo-500 transition">
+                    Upload
+                </a>
+            </div>
+        </nav>
     </header>
 
     <main class="mx-auto max-w-7xl px-6 py-12">
