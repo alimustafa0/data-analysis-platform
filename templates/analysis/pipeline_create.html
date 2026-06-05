@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% load analysis_tags %}
+
+{% block title %}Configure Pipeline — {{ dataset.original_filename }}{% endblock %}
+
+{% block content %}
+
+{# ── Header ────────────────────────────────────────────────────────────────── #}
+<div class="mb-8">
+    <a href="{% url 'analysis:result' pk=dataset.pk %}"
+       class="text-sm text-indigo-400 hover:text-indigo-300 transition">
+        ← Back to EDA results
+    </a>
+    <h1 class="mt-2 text-2xl font-bold text-white">Configure Your Pipeline</h1>
+    <p class="mt-1 text-sm text-gray-500">
+        {{ dataset.original_filename }} &nbsp;·&nbsp;
+        {{ result.row_count }} rows × {{ result.column_count }} columns
+    </p>
+</div>
+
+<form method="post" action="{% url 'analysis:pipeline_submit' dataset_pk=dataset.pk %}">
+    {% csrf_token %}
+
+    {# Hidden column names for POST parsing #}
+    {% for col in result.column_names %}
+    <input type="hidden" name="col_names" value="{{ col }}">
+    {% endfor %}
+
+    {# ── Pipeline name ─────────────────────────────────────────────────────── #}
+    <div class="mb-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <label for="pipeline_name"
+               class="block text-xs font-semibold uppercase tracking-widest text-gray-400 mb-2">
+            Pipeline Name
+        </label>
+        <input type="text"
+               id="pipeline_name"
+               name="pipeline_name"
+               value="Analysis Pipeline"
+               class="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500">
+    </div>
+
+    {# ── Step selector ─────────────────────────────────────────────────────── #}
+    <div class="mb-6">
+        <p class="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Select Steps to Run
+        </p>
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+            {% for step_id, step_label in steps_available %}
+            <label class="step-card flex cursor-pointer flex-col gap-1 rounded-xl border border-gray-800 bg-gray-900 p-4 transition hover:border-indigo-600 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-950/40">
+                <input type="checkbox" name="steps" value="{{ step_id }}" class="sr-only" checked>
+                <span class="text-sm font-medium text-white">{{ step_label }}</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+
+    {# ── Data Cleaning ─────────────────────────────────────────────────────── #}
+    <div class="mb-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <h2 class="mb-1 text-base font-semibold text-white">Data Cleaning</h2>
+        <p class="mb-5 text-xs text-gray-500">
+            Smart defaults are pre-filled based on your data. Override any column individually.
+        </p>
+
+        {# Missing values per column #}
+        <div class="mb-6">
+            <h3 class="mb-3 text-xs font-semibold uppercase tracking-widest text-gray-400">
+                Missing Value Strategy
+            </h3>
+            <div class="overflow-x-auto rounded-lg border border-gray-800">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-gray-800 bg-gray-800/50">
+                            <th class="px-4 py-2.5 text-left font-medium text-gray-400">Column</th>
+                            <th class="px-4 py-2.5 text-left font-medium text-gray-400">Type</th>
+                            <th class="px-4 py-2.5 text-right font-medium text-gray-400">Missing</th>
+                            <th class="px-4 py-2.5 text-left font-medium text-gray-400">Strategy</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-800">
+                        {% for col, info in cleaning_suggestions.items %}
+                        <tr>
+                            <td class="px-4 py-3 font-medium text-gray-200">{{ col }}</td>
+                            <td class="px-4 py-3">
+                                <span class="rounded bg-gray-800 px-1.5 py-0.5 font-mono text-xs text-indigo-300">
+                                    {{ info.dtype }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-right {% if info.missing_pct > 0 %}text-amber-400{% else %}text-gray-600{% endif %}">
+                                {{ info.missing_pct }}%
+                            </td>
+                            <td class="px-4 py-3">
+                                <select name="mv_strategy_{{ col }}"
+                                        class="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                                    <option value="auto" {% if info.suggested_strategy == "auto" %}selected{% endif %}>
+                                        Auto ({{ info.suggested_strategy }})
+                                    </option>
+                                    <option value="none" {% if info.suggested_strategy == "none" %}selected{% endif %}>No action</option>
+                                    <option value="mean" {% if info.suggested_strategy == "mean" %}selected{% endif %}>Mean</option>
+                                    <option value="median" {% if info.suggested_strategy == "median" %}selected{% endif %}>Median</option>
+                                    <option value="mode" {% if info.suggested_strategy == "mode" %}selected{% endif %}>Mode</option>
+                                    <option value="drop_rows" {% if info.suggested_strategy == "drop_rows" %}selected{% endif %}>Drop rows</option>
+                                    <option value="drop_column" {% if info.suggested_strategy == "drop_column" %}selected{% endif %}>Drop column</option>
+                                    <option value="knn" {% if info.suggested_strategy == "knn" %}selected{% endif %}>KNN Imputation</option>
+                                    <option value="iterative" {% if info.suggested_strategy == "iterative" %}selected{% endif %}>Iterative Imputation</option>
+                                    <option value="forward_fill">Forward Fill</option>
+                                    <option value="backward_fill">Backward Fill</option>
+                                    <option value="constant">Fill with 0 / "Unknown"</option>
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        {# Outlier handling #}
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Outlier Detection</label>
+                <select name="outlier_method"
+                        class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                    <option value="iqr">IQR (recommended)</option>
+                    <option value="zscore">Z-Score</option>
+                    <option value="isolation_forest">Isolation Forest</option>
+                    <option value="none">Skip</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Outlier Action</label>
+                <select name="outlier_action"
+                        class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                    <option value="cap">Cap to boundary</option>
+                    <option value="remove">Remove rows</option>
+                    <option value="transform">Log transform</option>
+                </select>
+            </div>
+            <div class="flex items-end">
+                <label class="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" name="drop_duplicates" checked
+                           class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600 focus:ring-indigo-500">
+                    <span class="text-sm text-gray-300">Remove duplicate rows</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    {# ── Encoding ──────────────────────────────────────────────────────────── #}
+    <div class="mb-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <h2 class="mb-1 text-base font-semibold text-white">Feature Encoding</h2>
+        <p class="mb-4 text-xs text-gray-500">
+            How to convert categorical columns into numbers for model training.
+        </p>
+        <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1.5">Strategy</label>
+            <select name="encoding_strategy"
+                    class="w-full max-w-xs rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                <option value="auto">Auto (one-hot for low cardinality, label for high)</option>
+                <option value="onehot">One-Hot Encoding</option>
+                <option value="label">Label Encoding</option>
+                <option value="ordinal">Ordinal Encoding</option>
+                <option value="target">Target Encoding</option>
+            </select>
+        </div>
+    </div>
+
+    {# ── Scaling ───────────────────────────────────────────────────────────── #}
+    <div class="mb-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <h2 class="mb-1 text-base font-semibold text-white">Feature Scaling</h2>
+        <p class="mb-4 text-xs text-gray-500">
+            Normalise numeric column ranges so no single feature dominates the model.
+        </p>
+        <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1.5">Strategy</label>
+            <select name="scaling_strategy"
+                    class="w-full max-w-xs rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                <option value="auto">Auto (robust for skewed, standard for normal)</option>
+                <option value="standard">StandardScaler (mean=0, std=1)</option>
+                <option value="minmax">MinMaxScaler (0 to 1)</option>
+                <option value="robust">RobustScaler (IQR-based, outlier resistant)</option>
+                <option value="none">Skip</option>
+            </select>
+        </div>
+    </div>
+
+    {# ── Model Training ────────────────────────────────────────────────────── #}
+    <div class="mb-6 rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <h2 class="mb-1 text-base font-semibold text-white">Model Training</h2>
+        <p class="mb-5 text-xs text-gray-500">
+            Select a target column and a model. Leave task type on Auto to let the engine decide.
+        </p>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-5">
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Target Column</label>
+                <select name="target_column"
+                        class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                    <option value="">— None (unsupervised) —</option>
+                    {% for col in result.column_names %}
+                    <option value="{{ col }}">{{ col }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">Task Type</label>
+                <select name="task_type" id="task_type"
+                        class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                    <option value="auto">Auto-detect</option>
+                    <option value="classification">Classification</option>
+                    <option value="regression">Regression</option>
+                    <option value="clustering">Clustering</option>
+                </select>
+            </div>
+        </div>
+
+        {# Model catalog — rendered per task type via JS #}
+        <div class="mb-5">
+            <label class="block text-xs font-medium text-gray-400 mb-1.5">Model</label>
+            <select name="model_id"
+                    class="w-full max-w-sm rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                <option value="auto">Auto (tries top candidates, returns best)</option>
+                {% for task, models in model_catalog_json.items %}
+                    <optgroup label="{{ task|title }}">
+                        {% for m in models %}
+                        <option value="{{ m.id }}">{{ m.name }} — {{ m.speed }}</option>
+                        {% endfor %}
+                    </optgroup>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">
+                    Test Split
+                </label>
+                <select name="test_size"
+                        class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                    <option value="0.1">10%</option>
+                    <option value="0.2" selected>20% (recommended)</option>
+                    <option value="0.3">30%</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-400 mb-1.5">CV Folds</label>
+                <select name="cv_folds"
+                        class="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                    <option value="3">3</option>
+                    <option value="5" selected>5 (recommended)</option>
+                    <option value="10">10</option>
+                </select>
+            </div>
+            <div class="flex items-end gap-4">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" name="cross_validation" checked
+                           class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-indigo-600">
+                    <span class="text-sm text-gray-300">Cross-validation</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    {# ── Report ────────────────────────────────────────────────────────────── #}
+    <div class="mb-8 rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <h2 class="mb-1 text-base font-semibold text-white">Report Generation</h2>
+        <p class="mb-4 text-xs text-gray-500">
+            Export a full analysis report at the end of the pipeline.
+        </p>
+        <div>
+            <label class="block text-xs font-medium text-gray-400 mb-1.5">Format</label>
+            <select name="report_format"
+                    class="w-full max-w-xs rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus:border-indigo-500 focus:outline-none">
+                <option value="html">HTML (interactive)</option>
+                <option value="pdf">PDF</option>
+            </select>
+        </div>
+    </div>
+
+    {# ── Submit ────────────────────────────────────────────────────────────── #}
+    <div class="flex items-center justify-end gap-4">
+        <a href="{% url 'analysis:result' pk=dataset.pk %}"
+           class="text-sm text-gray-500 hover:text-white transition">
+            Cancel
+        </a>
+        <button type="submit"
+                class="rounded-xl bg-indigo-600 px-8 py-3 text-sm font-semibold text-white shadow-lg hover:bg-indigo-500 transition focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:ring-offset-2 focus:ring-offset-gray-950">
+            Run Pipeline →
+        </button>
+    </div>
+
+</form>
+{% endblock %}

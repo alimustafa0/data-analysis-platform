@@ -1,0 +1,284 @@
+{% extends "base.html" %}
+
+{% block title %}Pipeline Results — {{ pipeline.dataset.original_filename }}{% endblock %}
+
+{% block content %}
+
+{# ── Header ────────────────────────────────────────────────────────────────── #}
+<div class="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div>
+        <a href="{% url 'analysis:result' pk=pipeline.dataset.pk %}"
+           class="text-sm text-indigo-400 hover:text-indigo-300 transition">
+            ← Back to EDA results
+        </a>
+        <h1 class="mt-2 text-2xl font-bold text-white">{{ pipeline.name }}</h1>
+        <p class="mt-1 text-sm text-gray-500">{{ pipeline.dataset.original_filename }}</p>
+    </div>
+
+    <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1
+        {% if pipeline.status == 'completed' %}bg-emerald-900/50 text-emerald-400 ring-emerald-700
+        {% elif pipeline.status == 'running' %}bg-amber-900/50 text-amber-400 ring-amber-700
+        {% elif pipeline.status == 'failed' %}bg-red-900/50 text-red-400 ring-red-700
+        {% else %}bg-gray-800 text-gray-400 ring-gray-700{% endif %}">
+        <span class="h-1.5 w-1.5 rounded-full
+            {% if pipeline.status == 'running' %}animate-pulse {% endif %}
+            {% if pipeline.status == 'completed' %}bg-emerald-400
+            {% elif pipeline.status == 'running' %}bg-amber-400
+            {% elif pipeline.status == 'failed' %}bg-red-400
+            {% else %}bg-gray-400{% endif %}">
+        </span>
+        {{ pipeline.get_status_display }}
+    </span>
+</div>
+
+{% if auto_refresh %}
+<meta http-equiv="refresh" content="3">
+<div class="mb-6 rounded-xl border border-amber-800/50 bg-amber-900/20 px-5 py-3 text-sm text-amber-300">
+    Pipeline is running — this page refreshes automatically every 3 seconds.
+</div>
+{% endif %}
+
+{# ── Step cards ────────────────────────────────────────────────────────────── #}
+<div class="space-y-4">
+{% for step in steps %}
+<div class="rounded-xl border
+    {% if step.status == 'completed' %}border-gray-800
+    {% elif step.status == 'running' %}border-amber-700/50
+    {% elif step.status == 'failed' %}border-red-800/50
+    {% else %}border-gray-800{% endif %}
+    bg-gray-900 p-6">
+
+    {# Step header #}
+    <div class="flex items-center justify-between mb-4">
+        <div class="flex items-center gap-3">
+            <span class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-800 text-xs font-bold text-gray-300">
+                {{ step.order }}
+            </span>
+            <h2 class="text-base font-semibold text-white">{{ step.get_step_type_display }}</h2>
+        </div>
+        <div class="flex items-center gap-3">
+            {% if step.duration_seconds %}
+            <span class="text-xs text-gray-600">{{ step.duration_seconds|floatformat:2 }}s</span>
+            {% endif %}
+            <span class="text-xs font-semibold
+                {% if step.status == 'completed' %}text-emerald-400
+                {% elif step.status == 'running' %}text-amber-400 animate-pulse
+                {% elif step.status == 'failed' %}text-red-400
+                {% elif step.status == 'skipped' %}text-gray-600
+                {% else %}text-gray-500{% endif %}">
+                {{ step.get_status_display }}
+            </span>
+        </div>
+    </div>
+
+    {# Error message #}
+    {% if step.error_message %}
+    <div class="mb-4 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-300">
+        {{ step.error_message }}
+    </div>
+    {% endif %}
+
+    {# ── Cleaning results ────────────────────────────────────────────────── #}
+    {% if step.step_type == 'cleaning' and step.result %}
+    <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-4">
+        <div class="rounded-lg bg-gray-800 p-3 text-center">
+            <p class="text-xs text-gray-500">Rows before</p>
+            <p class="text-lg font-bold text-white">{{ step.result.rows_before }}</p>
+        </div>
+        <div class="rounded-lg bg-gray-800 p-3 text-center">
+            <p class="text-xs text-gray-500">Rows after</p>
+            <p class="text-lg font-bold text-white">{{ step.result.rows_after }}</p>
+        </div>
+        <div class="rounded-lg bg-gray-800 p-3 text-center">
+            <p class="text-xs text-gray-500">Rows removed</p>
+            <p class="text-lg font-bold {% if step.result.rows_removed > 0 %}text-amber-400{% else %}text-white{% endif %}">
+                {{ step.result.rows_removed }}
+            </p>
+        </div>
+        <div class="rounded-lg bg-gray-800 p-3 text-center">
+            <p class="text-xs text-gray-500">Cols removed</p>
+            <p class="text-lg font-bold {% if step.result.cols_removed > 0 %}text-amber-400{% else %}text-white{% endif %}">
+                {{ step.result.cols_removed }}
+            </p>
+        </div>
+    </div>
+    {% if step.result.actions %}
+    <div class="space-y-1">
+        {% for action in step.result.actions %}
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <span class="text-emerald-500">✓</span>
+            {% if action.column %}{{ action.column }}: {% endif %}
+            {{ action.action }}{% if action.missing_filled %} ({{ action.missing_filled }} values){% endif %}
+            {% if action.count %} ({{ action.count }}){% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# ── Encoding results ────────────────────────────────────────────────── #}
+    {% if step.step_type == 'encoding' and step.result %}
+    {% if step.result.message %}
+    <p class="text-sm text-gray-500">{{ step.result.message }}</p>
+    {% else %}
+    <div class="space-y-1">
+        {% for col_info in step.result.encoded_columns %}
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <span class="text-emerald-500">✓</span>
+            {{ col_info.column }} → {{ col_info.method }}
+            {% if col_info.cardinality %}({{ col_info.cardinality }} unique values){% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# ── Scaling results ─────────────────────────────────────────────────── #}
+    {% if step.step_type == 'scaling' and step.result %}
+    {% if step.result.message %}
+    <p class="text-sm text-gray-500">{{ step.result.message }}</p>
+    {% else %}
+    <div class="space-y-1">
+        {% for col_info in step.result.scaled_columns %}
+        <div class="flex items-center gap-2 text-sm text-gray-400">
+            <span class="text-emerald-500">✓</span>
+            {{ col_info.column }} → {{ col_info.scaler }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# ── Statistical tests results ────────────────────────────────────────── #}
+    {% if step.step_type == 'statistical_tests' and step.result %}
+    {% if step.result.message %}
+    <p class="text-sm text-gray-500">{{ step.result.message }}</p>
+    {% else %}
+    <div class="overflow-x-auto rounded-lg border border-gray-800">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-800 bg-gray-800/50">
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-400">Column</th>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-400">Test</th>
+                    <th class="px-4 py-2.5 text-right font-medium text-gray-400">p-value</th>
+                    <th class="px-4 py-2.5 text-left font-medium text-gray-400">Result</th>
+                    <th class="px-4 py-2.5 text-right font-medium text-gray-400">Skewness</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for test in step.result.tests %}
+                <tr>
+                    <td class="px-4 py-3 font-medium text-gray-200">{{ test.column }}</td>
+                    <td class="px-4 py-3 text-gray-400">{{ test.test }}</td>
+                    <td class="px-4 py-3 text-right text-gray-400">{{ test.p_value }}</td>
+                    <td class="px-4 py-3">
+                        <span class="rounded-full px-2 py-0.5 text-xs font-semibold
+                            {% if test.is_normal %}bg-emerald-900/50 text-emerald-400
+                            {% else %}bg-amber-900/50 text-amber-400{% endif %}">
+                            {{ test.interpretation }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-right text-gray-400">{{ test.skewness }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {# ── Model training results ───────────────────────────────────────────── #}
+    {% if step.step_type == 'model_training' and step.result %}
+    {% if step.result.error %}
+    <p class="text-sm text-red-400">{{ step.result.error }}</p>
+    {% else %}
+    <div class="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="rounded-lg bg-gray-800 p-3">
+            <p class="text-xs text-gray-500">Model</p>
+            <p class="text-sm font-bold text-white">{{ step.result.model }}</p>
+        </div>
+        <div class="rounded-lg bg-gray-800 p-3">
+            <p class="text-xs text-gray-500">Task</p>
+            <p class="text-sm font-bold text-indigo-400">{{ step.result.task_type|title }}</p>
+        </div>
+        <div class="rounded-lg bg-gray-800 p-3">
+            <p class="text-xs text-gray-500">Train rows</p>
+            <p class="text-sm font-bold text-white">{{ step.result.n_train }}</p>
+        </div>
+        <div class="rounded-lg bg-gray-800 p-3">
+            <p class="text-xs text-gray-500">Test rows</p>
+            <p class="text-sm font-bold text-white">{{ step.result.n_test }}</p>
+        </div>
+    </div>
+
+    {# Metrics #}
+    {% if step.result.metrics %}
+    <div class="mb-4">
+        <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-400">Metrics</p>
+        <div class="flex flex-wrap gap-3">
+            {% for metric, value in step.result.metrics.items %}
+            {% if value|stringformat:"s" != "[object Object]" %}
+            <div class="rounded-lg bg-indigo-950/50 border border-indigo-800/50 px-4 py-2 text-center">
+                <p class="text-xs text-indigo-400">{{ metric|upper }}</p>
+                <p class="text-lg font-bold text-white">{{ value }}</p>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    {# Cross-validation #}
+    {% if step.result.cross_validation %}
+    <div class="mb-4 rounded-lg bg-gray-800 px-4 py-3">
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
+            Cross-Validation ({{ step.result.cross_validation.folds }}-fold {{ step.result.cross_validation.scoring }})
+        </p>
+        <p class="text-white font-bold">
+            {{ step.result.cross_validation.mean }}
+            <span class="text-sm text-gray-500 font-normal">± {{ step.result.cross_validation.std }}</span>
+        </p>
+    </div>
+    {% endif %}
+
+    {# Feature importance #}
+    {% if step.result.feature_importance %}
+    <div>
+        <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Top Feature Importances
+        </p>
+        <div class="space-y-1.5">
+            {% for fi in step.result.feature_importance|slice:":10" %}
+            <div class="flex items-center gap-3">
+                <span class="w-32 truncate text-right text-xs text-gray-400">{{ fi.feature }}</span>
+                <div class="flex-1 rounded-full bg-gray-800 h-2">
+                    <div class="rounded-full bg-indigo-500 h-2"
+                         style="width: {{ fi.importance|floatformat:4 }}%"></div>
+                </div>
+                <span class="w-12 text-right text-xs text-gray-500">{{ fi.importance }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+    {% endif %}
+
+</div>
+{% endfor %}
+</div>
+
+{% if pipeline.status == 'completed' and pipeline.processed_file %}
+<div class="mt-6 rounded-xl border border-gray-800 bg-gray-900 px-6 py-4 flex items-center justify-between">
+    <div>
+        <p class="text-sm font-semibold text-white">Processed Dataset</p>
+        <p class="text-xs text-gray-500 mt-0.5">Cleaned and transformed — ready to download.</p>
+    </div>
+    <a href="{{ pipeline.processed_file.url }}"
+       class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition">
+        Download CSV
+    </a>
+</div>
+{% endif %}
+
+{% endblock %}

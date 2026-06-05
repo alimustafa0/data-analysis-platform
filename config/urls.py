@@ -13,4 +13,5 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("apps.core.urls", namespace="core")),
     path("analysis/", include("apps.analysis.urls", namespace="analysis")),
-] + static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
+] + static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0]) \
+  + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

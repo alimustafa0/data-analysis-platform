@@ -65,3 +65,32 @@ def process_dataset(self, dataset_id: str) -> dict:
         dataset.save(update_fields=["status", "error_message", "updated_at"])
         logger.exception("process_dataset failed for dataset_id=%s", dataset_id)
         raise self.retry(exc=exc, countdown=2 ** self.request.retries)
+    
+
+@shared_task(bind=True, max_retries=2)
+def run_pipeline(self, pipeline_id: str) -> dict:
+    """
+    Execute all steps of an AnalysisPipeline in order.
+
+    Delegates all logic to PipelineExecutor — this task is intentionally
+    thin: it only handles Celery lifecycle and top-level error capture.
+    """
+    from .models import AnalysisPipeline
+    from .pipeline_executor import PipelineExecutor
+
+    try:
+        pipeline = AnalysisPipeline.objects.get(pk=pipeline_id)
+    except AnalysisPipeline.DoesNotExist:
+        logger.error("run_pipeline: unknown pipeline_id=%s", pipeline_id)
+        return {"status": "error", "detail": "Pipeline not found."}
+
+    try:
+        executor = PipelineExecutor(pipeline)
+        executor.run()
+        return {"status": pipeline.status, "pipeline_id": pipeline_id}
+    except Exception as exc:
+        pipeline.status = AnalysisPipeline.Status.FAILED
+        pipeline.error_message = str(exc)
+        pipeline.save(update_fields=["status", "error_message", "updated_at"])
+        logger.exception("run_pipeline failed for pipeline_id=%s", pipeline_id)
+        raise self.retry(exc=exc, countdown=10)
