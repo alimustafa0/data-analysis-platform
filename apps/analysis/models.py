@@ -168,3 +168,203 @@ class AnalysisResult(models.Model):
 
     def __str__(self) -> str:
         return f"Result for {self.dataset.original_filename}"
+    
+
+class AnalysisPipeline(models.Model):
+    """
+    Represents one full analysis run on a Dataset.
+
+    A Dataset can have multiple pipelines — the user might run the
+    data with different cleaning strategies or train several models.
+    Each pipeline owns an ordered sequence of PipelineStep records.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        RUNNING = "running", _("Running")
+        COMPLETED = "completed", _("Completed")
+        FAILED = "failed", _("Failed")
+
+    # ─── Identity ─────────────────────────────────────────────────────────────
+    id: models.UUIDField = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    dataset: models.ForeignKey = models.ForeignKey(
+        Dataset,
+        on_delete=models.CASCADE,
+        related_name="pipelines",
+        help_text=_("The source dataset this pipeline operates on."),
+    )
+    name: models.CharField = models.CharField(
+        max_length=255,
+        default="Analysis Pipeline",
+        help_text=_("Human-readable label — useful when comparing multiple runs."),
+    )
+
+    # ─── State ────────────────────────────────────────────────────────────────
+    status: models.CharField = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    error_message: models.TextField = models.TextField(
+        blank=True,
+        help_text=_("Top-level error if the pipeline itself fails to start."),
+    )
+
+    # ─── Artefacts ────────────────────────────────────────────────────────────
+    processed_file: models.FileField = models.FileField(
+        upload_to="pipelines/processed/",
+        null=True,
+        blank=True,
+        help_text=_(
+            "The cleaned and transformed dataset produced by the pipeline. "
+            "Populated after the cleaning and encoding steps complete. "
+            "Subsequent steps (model training, export) read from this file."
+        ),
+    )
+
+    # ─── Timestamps ───────────────────────────────────────────────────────────
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+    updated_at: models.DateTimeField = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = _("Analysis Pipeline")
+        verbose_name_plural = _("Analysis Pipelines")
+
+    def __str__(self) -> str:
+        return f"{self.name} → {self.dataset.original_filename} [{self.status}]"
+
+    @property
+    def is_complete(self) -> bool:
+        """True when every step has finished (completed or skipped)."""
+        return self.status == self.Status.COMPLETED
+
+    @property
+    def progress_pct(self) -> int:
+        """
+        Rough completion percentage based on step statuses.
+        Used by the UI progress bar.
+        """
+        steps = self.steps.all()
+        if not steps:
+            return 0
+        done = steps.filter(
+            status__in=[PipelineStep.Status.COMPLETED, PipelineStep.Status.SKIPPED]
+        ).count()
+        return round(done / steps.count() * 100)
+
+
+class PipelineStep(models.Model):
+    """
+    A single, atomic operation within an AnalysisPipeline.
+
+    Each step has:
+    - A type  (what kind of operation it is)
+    - A config (the user's chosen options, or smart defaults if auto=True)
+    - A result (the output after execution — metrics, paths, summaries)
+    - Its own status and timestamps
+
+    Keeping steps independent means failures are isolated, retries are
+    surgical, and the UI can show granular progress.
+    """
+
+    class StepType(models.TextChoices):
+        CLEANING = "cleaning", _("Data Cleaning")
+        ENCODING = "encoding", _("Feature Encoding")
+        SCALING = "scaling", _("Feature Scaling")
+        FEATURE_SELECTION = "feature_selection", _("Feature Selection")
+        EDA = "eda", _("Exploratory Analysis")
+        STATISTICAL_TESTS = "statistical_tests", _("Statistical Tests")
+        MODEL_TRAINING = "model_training", _("Model Training")
+        REPORT = "report", _("Report Generation")
+
+    class Status(models.TextChoices):
+        PENDING = "pending", _("Pending")
+        RUNNING = "running", _("Running")
+        COMPLETED = "completed", _("Completed")
+        SKIPPED = "skipped", _("Skipped")
+        FAILED = "failed", _("Failed")
+
+    # ─── Identity ─────────────────────────────────────────────────────────────
+    id: models.UUIDField = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    pipeline: models.ForeignKey = models.ForeignKey(
+        AnalysisPipeline,
+        on_delete=models.CASCADE,
+        related_name="steps",
+    )
+
+    # ─── Definition ───────────────────────────────────────────────────────────
+    step_type: models.CharField = models.CharField(
+        max_length=30,
+        choices=StepType.choices,
+        db_index=True,
+    )
+    order: models.PositiveSmallIntegerField = models.PositiveSmallIntegerField(
+        help_text=_("Execution order within the pipeline. Lower = runs first."),
+    )
+
+    # ─── Configuration ────────────────────────────────────────────────────────
+    config: models.JSONField = models.JSONField(
+        default=dict,
+        help_text=_(
+            "User's chosen options for this step. "
+            "Set {'auto': true} for any sub-option to use smart defaults. "
+            "Example for cleaning: "
+            "{'missing_values': {'price': {'strategy': 'median', 'auto': false}}, "
+            "'outliers': {'method': 'iqr', 'action': 'cap', 'auto': true}}"
+        ),
+    )
+
+    # ─── Output ───────────────────────────────────────────────────────────────
+    result: models.JSONField = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=_(
+            "Populated after execution. Structure varies by step type. "
+            "Example for model_training: metrics, feature_importances, model_path."
+        ),
+    )
+
+    # ─── State ────────────────────────────────────────────────────────────────
+    status: models.CharField = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    error_message: models.TextField = models.TextField(blank=True)
+
+    # ─── Timing ───────────────────────────────────────────────────────────────
+    started_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)
+    completed_at: models.DateTimeField = models.DateTimeField(null=True, blank=True)
+    created_at: models.DateTimeField = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["order"]
+        verbose_name = _("Pipeline Step")
+        verbose_name_plural = _("Pipeline Steps")
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pipeline", "order"],
+                name="unique_step_order_per_pipeline",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"[{self.order}] {self.get_step_type_display()} — {self.status}"
+
+    @property
+    def duration_seconds(self) -> float | None:
+        """Wall-clock execution time in seconds, or None if not yet complete."""
+        if self.started_at and self.completed_at:
+            return (self.completed_at - self.started_at).total_seconds()
+        return None
