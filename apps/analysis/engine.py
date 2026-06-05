@@ -109,12 +109,35 @@ class AnalysisEngine:
     # ──────────────────────────────────────────────────────────────────────────
 
     def _load_polars(self) -> pl.DataFrame:
-        """Load the file into a Polars DataFrame using the correct reader."""
+        """
+        Load the file into a Polars DataFrame using the correct reader.
+
+        infer_schema_length=10000 samples more rows before committing to a
+        dtype — reduces mis-inference on mixed-type columns.
+
+        ignore_errors=True tells Polars to substitute null for any value it
+        cannot cast to the inferred dtype rather than aborting the entire
+        load. The missing-value analysis downstream will surface those nulls
+        so the user sees them in the dashboard.
+        """
         reader_name = self._READERS.get(self._extension)
         if reader_name is None:
             raise ValueError(f"Unsupported extension: {self._extension}")
 
         reader = getattr(pl, reader_name)
+
+        # kwargs applied selectively — not every reader accepts every argument.
+        if self._extension in {".csv"}:
+            return reader(
+                self._path,
+                infer_schema_length=10_000,
+                ignore_errors=True,
+            )
+
+        if self._extension in {".xlsx", ".xls"}:
+            return reader(self._path, infer_schema_length=10_000)
+
+        # .parquet — schema is embedded in the file, no inference needed.
         return reader(self._path)
 
     def _to_pandas(self, pl_df: pl.DataFrame) -> pd.DataFrame:
