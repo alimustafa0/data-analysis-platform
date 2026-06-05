@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% load analysis_tags %}
+
+{% block title %}{{ dataset.original_filename }} — Results{% endblock %}
+
+{% block extra_head %}
+{# Plotly loaded in head without defer so it is ready before body scripts run. #}
+<script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+{% endblock %}
+
+{% block content %}
+
+{# ── Header ────────────────────────────────────────────────────────────────── #}
+<div class="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div class="min-w-0">
+        <a href="{% url 'analysis:upload' %}"
+           class="text-sm text-indigo-400 hover:text-indigo-300 transition">
+            ← Upload another
+        </a>
+        <h1 class="mt-2 text-2xl font-bold text-white truncate">
+            {{ dataset.original_filename }}
+        </h1>
+        <p class="mt-1 text-sm text-gray-500">
+            {{ dataset.created_at|date:"N j, Y · g:i A" }}
+            &nbsp;·&nbsp; {{ file_size }}
+        </p>
+    </div>
+
+    {# Status badge #}
+    {% if dataset.status == "ready" %}
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-900/50 px-3 py-1 text-xs font-semibold text-emerald-400 ring-1 ring-emerald-700">
+        <span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Ready
+    </span>
+    {% elif dataset.status == "processing" %}
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-amber-900/50 px-3 py-1 text-xs font-semibold text-amber-400 ring-1 ring-amber-700">
+        <span class="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse"></span>Processing
+    </span>
+    {% elif dataset.status == "failed" %}
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-red-900/50 px-3 py-1 text-xs font-semibold text-red-400 ring-1 ring-red-700">
+        <span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>Failed
+    </span>
+    {% else %}
+    <span class="inline-flex items-center gap-1.5 rounded-full bg-gray-800 px-3 py-1 text-xs font-semibold text-gray-400 ring-1 ring-gray-700">
+        Queued
+    </span>
+    {% endif %}
+</div>
+
+{# ── Non-ready states ──────────────────────────────────────────────────────── #}
+{% if dataset.status == "failed" %}
+<div class="rounded-xl border border-red-800 bg-red-900/30 px-6 py-10 text-center">
+    <p class="text-lg font-semibold text-red-300">Analysis failed</p>
+    <p class="mt-2 text-sm text-red-400">{{ dataset.error_message|default:"An unexpected error occurred." }}</p>
+    <a href="{% url 'analysis:upload' %}"
+       class="mt-6 inline-block rounded-lg bg-red-800 px-5 py-2 text-sm font-medium text-white hover:bg-red-700 transition">
+        Try again
+    </a>
+</div>
+
+{% elif dataset.status != "ready" %}
+{# Auto-refresh every 3 seconds until the task completes. #}
+<meta http-equiv="refresh" content="3">
+<div class="rounded-xl border border-gray-800 bg-gray-900 px-6 py-20 text-center">
+    <div class="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-700 border-t-indigo-500"></div>
+    <p class="mt-6 text-lg font-semibold text-white">Analysing your dataset…</p>
+    <p class="mt-2 text-sm text-gray-500">This page refreshes automatically.</p>
+</div>
+
+{% else %}
+{# ── Full dashboard (status == ready) ──────────────────────────────────────── #}
+
+{# Overview stat cards #}
+<div class="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
+    {% for label, value in overview_stats %}
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-5">
+        <p class="text-xs font-semibold uppercase tracking-widest text-gray-500">{{ label }}</p>
+        <p class="mt-2 text-2xl font-bold text-white">{{ value }}</p>
+    </div>
+    {% endfor %}
+</div>
+
+{# Column types + Missing values #}
+<div class="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Column Types
+        </h2>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-800">
+                    <th class="pb-2 text-left font-medium text-gray-400">Column</th>
+                    <th class="pb-2 text-left font-medium text-gray-400">Type</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for col, dtype in result.dtypes.items %}
+                <tr>
+                    <td class="py-2.5 text-gray-300">{{ col }}</td>
+                    <td class="py-2.5">
+                        <span class="rounded-md bg-gray-800 px-2 py-0.5 font-mono text-xs text-indigo-300">
+                            {{ dtype }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+            Missing Values
+        </h2>
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-800">
+                    <th class="pb-2 text-left font-medium text-gray-400">Column</th>
+                    <th class="pb-2 text-right font-medium text-gray-400">Count</th>
+                    <th class="pb-2 text-right font-medium text-gray-400">%</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for col, count in result.missing_counts.items %}
+                <tr>
+                    <td class="py-2.5 text-gray-300">{{ col }}</td>
+                    <td class="py-2.5 text-right {% if count > 0 %}text-amber-400{% else %}text-gray-600{% endif %}">
+                        {{ count }}
+                    </td>
+                    <td class="py-2.5 text-right {% if count > 0 %}text-amber-400{% else %}text-gray-600{% endif %}">
+                        {{ result.missing_pct|get_item:col }}%
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+
+{# Data preview table #}
+<div class="mb-8 overflow-x-auto rounded-xl border border-gray-800 bg-gray-900 p-6">
+    <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+        Data Preview
+        <span class="ml-2 font-normal normal-case text-gray-600">(first 10 rows)</span>
+    </h2>
+    {% if result.sample_rows %}
+    <table class="w-full whitespace-nowrap text-sm">
+        <thead>
+            <tr class="border-b border-gray-800">
+                {% for col in result.column_names %}
+                <th class="pb-2 pr-8 text-left font-medium text-gray-400">{{ col }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-800">
+            {% for row in result.sample_rows %}
+            <tr class="transition hover:bg-gray-800/40">
+                {% for col in result.column_names %}
+                <td class="max-w-xs truncate py-2.5 pr-8 text-gray-300">
+                    {{ row|get_item:col|default:"—" }}
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+
+{# Categorical value-count charts #}
+{% if categorical_charts %}
+<div class="mb-8">
+    <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+        Value Distributions
+    </h2>
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2" id="categorical-chart-grid"></div>
+</div>
+{% endif %}
+
+{# Numeric descriptive stats + histograms #}
+{% if numeric_charts %}
+<div class="mb-8">
+    <h2 class="mb-4 text-xs font-semibold uppercase tracking-widest text-gray-400">
+        Numeric Statistics
+    </h2>
+    <div class="mb-6 overflow-x-auto rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-gray-800">
+                    <th class="pb-2 text-left font-medium text-gray-400">Statistic</th>
+                    {% for chart in numeric_charts %}
+                    <th class="pb-2 text-right font-medium text-gray-400">{{ chart.column }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-800">
+                {% for stat in numeric_stat_keys %}
+                <tr>
+                    <td class="py-2.5 font-mono text-xs text-gray-500">{{ stat }}</td>
+                    {% for chart in numeric_charts %}
+                    <td class="py-2.5 text-right text-gray-300">
+                        {{ chart.stats|get_item:stat|floatformat:4|default:"—" }}
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2" id="numeric-chart-grid"></div>
+</div>
+{% endif %}
+
+{# Correlation heatmap — only rendered when 2+ numeric columns exist #}
+{% if result.correlation_matrix %}
+<div class="mb-8">
+    <h2 class="mb-1 text-xs font-semibold uppercase tracking-widest text-gray-400">
+        Correlation Matrix
+    </h2>
+    <p class="mb-4 text-xs text-gray-600">
+        Pearson r — values close to ±1 indicate strong linear relationships.
+    </p>
+    <div class="rounded-xl border border-gray-800 bg-gray-900 p-6">
+        <div id="correlation-heatmap" style="height: 420px;"></div>
+    </div>
+</div>
+{% endif %}
+
+{# Pass data to JavaScript safely — json_script escapes XSS automatically. #}
+{{ categorical_charts|json_script:"categorical-data" }}
+{{ numeric_charts|json_script:"numeric-data" }}
+{{ result.correlation_matrix|json_script:"correlation-data" }}
+
+{% endif %} {# end if ready #}
+{% endblock %}
+
+{% block extra_body %}
+{% if dataset.status == "ready" %}
+<script>
+(function () {
+    "use strict";
+
+    const PLOTLY_DARK = {
+        paper_bgcolor: "transparent",
+        plot_bgcolor:  "transparent",
+        font:          { color: "#9ca3af", size: 12, family: "ui-sans-serif, system-ui, sans-serif" },
+        xaxis:         { gridcolor: "#1f2937", linecolor: "#374151", color: "#6b7280" },
+        yaxis:         { gridcolor: "#1f2937", linecolor: "#374151", color: "#6b7280", automargin: true },
+        margin:        { l: 10, r: 20, t: 10, b: 40 },
+    };
+
+    const PLOTLY_CONFIG = { responsive: true, displayModeBar: false };
+
+    // ── Categorical bar charts ─────────────────────────────────────────────
+    const categoricalData = JSON.parse(document.getElementById("categorical-data").textContent);
+    const categoricalGrid = document.getElementById("categorical-chart-grid");
+
+    categoricalData.forEach(function (chart, i) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "rounded-xl border border-gray-800 bg-gray-900 p-6";
+        wrapper.innerHTML =
+            '<p class="text-sm font-semibold text-gray-200">' + chart.column + '</p>' +
+            '<p class="mt-0.5 mb-4 text-xs text-gray-500">' +
+                chart.cardinality + ' unique values · top ' + chart.values.length +
+            '</p>' +
+            '<div id="cat-' + i + '" style="height:280px"></div>';
+        categoricalGrid.appendChild(wrapper);
+
+        Plotly.newPlot(
+            "cat-" + i,
+            [{
+                type:        "bar",
+                orientation: "h",
+                x:           chart.counts,
+                y:           chart.values,
+                marker:      { color: "#6366f1", opacity: 0.85 },
+                hovertemplate: "<b>%{y}</b><br>Count: %{x}<extra></extra>",
+            }],
+            Object.assign({}, PLOTLY_DARK),
+            PLOTLY_CONFIG
+        );
+    });
+
+    // ── Numeric histograms ─────────────────────────────────────────────────
+    const numericData = JSON.parse(document.getElementById("numeric-data").textContent);
+    const numericGrid = document.getElementById("numeric-chart-grid");
+
+    if (numericGrid) {
+        numericData.forEach(function (chart, i) {
+            const wrapper = document.createElement("div");
+            wrapper.className = "rounded-xl border border-gray-800 bg-gray-900 p-6";
+            wrapper.innerHTML =
+                '<p class="text-sm font-semibold text-gray-200">' + chart.column + '</p>' +
+                '<p class="mt-0.5 mb-4 text-xs text-gray-500">Distribution</p>' +
+                '<div id="num-' + i + '" style="height:280px"></div>';
+            numericGrid.appendChild(wrapper);
+
+            Plotly.newPlot(
+                "num-" + i,
+                [{
+                    type:   "histogram",
+                    x:      chart.values || [],
+                    marker: { color: "#818cf8", opacity: 0.8 },
+                    hovertemplate: "Range: %{x}<br>Count: %{y}<extra></extra>",
+                }],
+                Object.assign({}, PLOTLY_DARK, { bargap: 0.05 }),
+                PLOTLY_CONFIG
+            );
+        });
+    }
+
+    // ── Correlation heatmap ────────────────────────────────────────────────
+    const heatmapContainer = document.getElementById("correlation-heatmap");
+
+    if (heatmapContainer) {
+        const corrMatrix = JSON.parse(
+            document.getElementById("correlation-data").textContent
+        );
+
+        const columns = Object.keys(corrMatrix);
+
+        if (columns.length >= 2) {
+            // Build z matrix: rows = columns, cols = columns.
+            const z = columns.map(function (row) {
+                return columns.map(function (col) {
+                    const val = corrMatrix[row][col];
+                    return val !== null ? val : 0;
+                });
+            });
+
+            Plotly.newPlot(
+                "correlation-heatmap",
+                [{
+                    type:           "heatmap",
+                    z:              z,
+                    x:              columns,
+                    y:              columns,
+                    colorscale:     "RdBu",
+                    zmid:           0,
+                    zmin:           -1,
+                    zmax:           1,
+                    reversescale:   true,
+                    hovertemplate:  "%{y} × %{x}<br>r = %{z:.4f}<extra></extra>",
+                    colorbar: {
+                        tickcolor:  "#6b7280",
+                        tickfont:   { color: "#9ca3af" },
+                        outlinecolor: "#374151",
+                    },
+                }],
+                Object.assign({}, PLOTLY_DARK, {
+                    margin: { l: 80, r: 20, t: 20, b: 80 },
+                    xaxis:  { color: "#6b7280", tickangle: -35 },
+                    yaxis:  { color: "#6b7280", automargin: true },
+                }),
+                PLOTLY_CONFIG
+            );
+        }
+    }
+
+})();
+</script>
+{% endif %}
+{% endblock %}
