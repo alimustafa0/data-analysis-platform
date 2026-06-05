@@ -11,7 +11,6 @@
 
 {% block content %}
 
-{# ── Header ────────────────────────────────────────────────────────────────── #}
 <div class="mb-8 flex flex-wrap items-start justify-between gap-4">
     <div>
         <a href="{% url 'analysis:result' pk=pipeline.dataset.pk %}"
@@ -21,7 +20,6 @@
         <h1 class="mt-2 text-2xl font-bold text-white">{{ pipeline.name }}</h1>
         <p class="mt-1 text-sm text-gray-500">{{ pipeline.dataset.original_filename }}</p>
     </div>
-
     <span class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1
         {% if pipeline.status == 'completed' %}bg-emerald-900/50 text-emerald-400 ring-emerald-700
         {% elif pipeline.status == 'running' %}bg-amber-900/50 text-amber-400 ring-amber-700
@@ -45,7 +43,6 @@
 </div>
 {% endif %}
 
-{# ── Step cards ────────────────────────────────────────────────────────────── #}
 <div class="space-y-4">
 {% for step in steps %}
 <div class="rounded-xl border
@@ -55,7 +52,6 @@
     {% else %}border-gray-800{% endif %}
     bg-gray-900 p-6">
 
-    {# Step header #}
     <div class="flex items-center justify-between mb-4">
         <div class="flex items-center gap-3">
             <span class="flex h-7 w-7 items-center justify-center rounded-full bg-gray-800 text-xs font-bold text-gray-300">
@@ -78,14 +74,13 @@
         </div>
     </div>
 
-    {# Error message #}
     {% if step.error_message %}
     <div class="mb-4 rounded-lg border border-red-800 bg-red-900/30 px-4 py-3 text-sm text-red-300">
         {{ step.error_message }}
     </div>
     {% endif %}
 
-    {# ── Cleaning results ────────────────────────────────────────────────── #}
+    {# ── Cleaning ─────────────────────────────────────────────────────────── #}
     {% if step.step_type == 'cleaning' and step.result %}
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 mb-4">
         <div class="rounded-lg bg-gray-800 p-3 text-center">
@@ -115,7 +110,8 @@
         <div class="flex items-center gap-2 text-sm text-gray-400">
             <span class="text-emerald-500">✓</span>
             {% if action.column %}{{ action.column }}: {% endif %}
-            {{ action.action }}{% if action.missing_filled %} ({{ action.missing_filled }} values){% endif %}
+            {{ action.action }}
+            {% if action.missing_filled %} ({{ action.missing_filled }} values){% endif %}
             {% if action.count %} ({{ action.count }}){% endif %}
         </div>
         {% endfor %}
@@ -123,7 +119,7 @@
     {% endif %}
     {% endif %}
 
-    {# ── Encoding results ────────────────────────────────────────────────── #}
+    {# ── Encoding ─────────────────────────────────────────────────────────── #}
     {% if step.step_type == 'encoding' and step.result %}
     {% if step.result.message %}
     <p class="text-sm text-gray-500">{{ step.result.message }}</p>
@@ -140,7 +136,7 @@
     {% endif %}
     {% endif %}
 
-    {# ── Scaling results ─────────────────────────────────────────────────── #}
+    {# ── Scaling ──────────────────────────────────────────────────────────── #}
     {% if step.step_type == 'scaling' and step.result %}
     {% if step.result.message %}
     <p class="text-sm text-gray-500">{{ step.result.message }}</p>
@@ -156,7 +152,7 @@
     {% endif %}
     {% endif %}
 
-    {# ── Statistical tests results ────────────────────────────────────────── #}
+    {# ── Statistical tests ────────────────────────────────────────────────── #}
     {% if step.step_type == 'statistical_tests' and step.result %}
     {% if step.result.message %}
     <p class="text-sm text-gray-500">{{ step.result.message }}</p>
@@ -194,7 +190,7 @@
     {% endif %}
     {% endif %}
 
-    {# ── Model training results ───────────────────────────────────────────── #}
+    {# ── Model training ───────────────────────────────────────────────────── #}
     {% if step.step_type == 'model_training' and step.result %}
     {% if step.result.error %}
     <p class="text-sm text-red-400">{{ step.result.error }}</p>
@@ -217,25 +213,19 @@
             <p class="text-sm font-bold text-white">{{ step.result.n_test }}</p>
         </div>
     </div>
-
-    {# Metrics #}
     {% if step.result.metrics %}
     <div class="mb-4">
         <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-400">Metrics</p>
         <div class="flex flex-wrap gap-3">
             {% for metric, value in step.result.metrics.items %}
-            {% if value|stringformat:"s" != "[object Object]" %}
             <div class="rounded-lg bg-indigo-950/50 border border-indigo-800/50 px-4 py-2 text-center">
                 <p class="text-xs text-indigo-400">{{ metric|upper }}</p>
                 <p class="text-lg font-bold text-white">{{ value }}</p>
             </div>
-            {% endif %}
             {% endfor %}
         </div>
     </div>
     {% endif %}
-
-    {# Cross-validation #}
     {% if step.result.cross_validation %}
     <div class="mb-4 rounded-lg bg-gray-800 px-4 py-3">
         <p class="text-xs font-semibold uppercase tracking-widest text-gray-400 mb-1">
@@ -247,8 +237,6 @@
         </p>
     </div>
     {% endif %}
-
-    {# Feature importance — rendered as Plotly chart via extra_body #}
     {% if step.result.feature_importance %}
     <div class="mt-4">
         <p class="mb-2 text-xs font-semibold uppercase tracking-widest text-gray-400">
@@ -256,7 +244,6 @@
         </p>
         <div id="feature-importance-chart" style="height: 320px;"></div>
     </div>
-    {% endif %}
     {% endif %}
     {% endif %}
     {% endif %}
@@ -269,7 +256,6 @@
 <div class="mt-6 rounded-xl border border-gray-800 bg-gray-900 px-6 py-5">
     <p class="mb-4 text-sm font-semibold text-white">Pipeline Outputs</p>
     <div class="flex flex-wrap gap-3">
-
         {% if pipeline.processed_file %}
         <a href="{{ pipeline.processed_file.url }}"
            class="inline-flex items-center gap-2 rounded-lg bg-gray-800 px-4 py-2 text-sm font-medium text-gray-200 hover:bg-gray-700 transition">
@@ -279,7 +265,6 @@
             Download Processed Dataset (.csv)
         </a>
         {% endif %}
-
         {% if has_model %}
         <a href="{% url 'analysis:model_download' pk=pipeline.pk %}"
            class="inline-flex items-center gap-2 rounded-lg bg-indigo-800/60 border border-indigo-700/50 px-4 py-2 text-sm font-medium text-indigo-200 hover:bg-indigo-700/60 transition">
@@ -289,7 +274,15 @@
             Download Trained Model (.joblib)
         </a>
         {% endif %}
-
+        {% if report_url %}
+            <a href="{{ report_url }}" target="_blank"
+            class="inline-flex items-center gap-2 rounded-lg bg-emerald-800/60 border border-emerald-700/50 px-4 py-2 text-sm font-medium text-emerald-200 hover:bg-emerald-700/60 transition">
+                <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                </svg>
+                View Full Report (.html)
+            </a>
+        {% endif %}
     </div>
 </div>
 {% endif %}
@@ -302,13 +295,10 @@
 <script>
 (function () {
     "use strict";
-
     const fi = JSON.parse(document.getElementById("fi-data").textContent);
     if (!fi || !fi.length) return;
-
     const features    = fi.map(function (d) { return d.feature; }).reverse();
     const importances = fi.map(function (d) { return d.importance; }).reverse();
-
     Plotly.newPlot(
         "feature-importance-chart",
         [{
@@ -323,7 +313,7 @@
             paper_bgcolor: "transparent",
             plot_bgcolor:  "transparent",
             font:  { color: "#9ca3af", size: 12 },
-            xaxis: { gridcolor: "#1f2937", color: "#6b7280", title: { text: "Importance", font: { color: "#6b7280" } } },
+            xaxis: { gridcolor: "#1f2937", color: "#6b7280" },
             yaxis: { automargin: true, color: "#9ca3af" },
             margin: { l: 10, r: 20, t: 10, b: 40 },
         },

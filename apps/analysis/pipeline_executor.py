@@ -155,6 +155,9 @@ class PipelineExecutor:
             elif step.step_type == PipelineStep.StepType.MODEL_TRAINING:
                 result = self._run_model_training(step)
 
+            elif step.step_type == PipelineStep.StepType.REPORT:
+                result = self._run_report(step)
+
             else:
                 result = {"message": f"Step type '{step.step_type}' not yet implemented."}
 
@@ -609,6 +612,75 @@ class PipelineExecutor:
         result["model_file"] = str(model_path.relative_to(settings.MEDIA_ROOT))
 
         return result
+    
+    def _run_report(self, step: PipelineStep) -> dict[str, Any]:
+        """
+        Render a self-contained HTML report summarising the full pipeline run.
+
+        Uses Django's render_to_string so the report gets the same template
+        engine as the app — custom filters, inheritance, everything works.
+        The output is saved to media storage and linked from the status page.
+        """
+        import json
+        from django.template.loader import render_to_string
+
+        analysis_result = getattr(self._dataset, "result", None)
+
+        # Collect results from every non-report step.
+        steps_data: list[dict] = []
+        model_result: dict | None = None
+        feature_importance: list[dict] = []
+
+        for s in self._pipeline.steps.exclude(
+            step_type=PipelineStep.StepType.REPORT
+        ):
+            steps_data.append(
+                {
+                    "type":      s.get_step_type_display(),
+                    "step_type": s.step_type,
+                    "status":    s.get_status_display(),
+                    "duration":  s.duration_seconds,
+                    "result":    s.result,
+                }
+            )
+            if (
+                s.step_type == PipelineStep.StepType.MODEL_TRAINING
+                and s.status == PipelineStep.Status.COMPLETED
+                and s.result
+            ):
+                model_result = s.result
+                feature_importance = s.result.get("feature_importance", [])
+
+        html_content = render_to_string(
+            "analysis/report.html",
+            {
+                "pipeline":              self._pipeline,
+                "dataset":               self._dataset,
+                "analysis_result":       analysis_result,
+                "steps":                 steps_data,
+                "model_result":          model_result,
+                "feature_importance_json": json.dumps(feature_importance),
+                "generated_at":          timezone.now(),
+            },
+        )
+
+        report_dir = (
+            Path(settings.MEDIA_ROOT)
+            / "pipelines"
+            / "reports"
+            / str(self._pipeline.pk)
+        )
+        report_dir.mkdir(parents=True, exist_ok=True)
+        report_path = report_dir / "report.html"
+        report_path.write_text(html_content, encoding="utf-8")
+
+        # Normalise to forward slashes so the URL is valid on Windows too.
+        relative = str(report_path.relative_to(settings.MEDIA_ROOT)).replace("\\", "/")
+
+        return {
+            "report_file": relative,
+            "format":      step.config.get("format", "html"),
+        }
 
     # ──────────────────────────────────────────────────────────────────────────
     # Utilities

@@ -1,0 +1,322 @@
+{% load analysis_tags %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Analysis Report — {{ dataset.original_filename }}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+    <style>
+        @media print {
+            .no-print { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-white text-gray-900 font-sans antialiased">
+
+{# ── Header ────────────────────────────────────────────────────────────────── #}
+<div class="bg-indigo-700 text-white px-8 py-6 print:bg-indigo-700">
+    <div class="max-w-5xl mx-auto">
+        <p class="text-indigo-300 text-xs font-semibold uppercase tracking-widest mb-1">
+            Data Analysis Platform
+        </p>
+        <h1 class="text-2xl font-bold">{{ dataset.original_filename }}</h1>
+        <p class="text-indigo-300 text-sm mt-1">
+            {{ pipeline.name }}
+            &nbsp;·&nbsp;
+            Generated {{ generated_at|date:"N j, Y · g:i A" }}
+        </p>
+    </div>
+</div>
+
+<div class="max-w-5xl mx-auto px-8 py-10">
+
+{# ── Dataset overview ──────────────────────────────────────────────────────── #}
+<section class="mb-10">
+    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+        Dataset Overview
+    </h2>
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="rounded-lg bg-gray-50 border border-gray-200 p-4 text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Rows</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">
+                {% if analysis_result %}{{ analysis_result.row_count|default:"—" }}{% else %}—{% endif %}
+            </p>
+        </div>
+        <div class="rounded-lg bg-gray-50 border border-gray-200 p-4 text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Columns</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">
+                {% if analysis_result %}{{ analysis_result.column_count|default:"—" }}{% else %}—{% endif %}
+            </p>
+        </div>
+        <div class="rounded-lg bg-gray-50 border border-gray-200 p-4 text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Duplicates</p>
+            <p class="text-2xl font-bold text-gray-800 mt-1">
+                {% if analysis_result %}{{ analysis_result.duplicate_row_count }}{% else %}—{% endif %}
+            </p>
+        </div>
+        <div class="rounded-lg bg-gray-50 border border-gray-200 p-4 text-center">
+            <p class="text-xs text-gray-500 uppercase tracking-wide">Status</p>
+            <p class="text-sm font-bold text-indigo-600 mt-1">
+                {{ pipeline.get_status_display }}
+            </p>
+        </div>
+    </div>
+</section>
+
+{# ── Data quality ──────────────────────────────────────────────────────────── #}
+{% if analysis_result %}
+<section class="mb-10">
+    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+        Data Quality
+    </h2>
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+
+        <div>
+            <h3 class="text-sm font-semibold text-gray-600 mb-2">Column Types</h3>
+            <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left font-medium text-gray-600">Column</th>
+                        <th class="px-4 py-2 text-left font-medium text-gray-600">Type</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for col, dtype in analysis_result.dtypes.items %}
+                    <tr>
+                        <td class="px-4 py-2.5 text-gray-800">{{ col }}</td>
+                        <td class="px-4 py-2.5">
+                            <span class="rounded bg-indigo-50 px-2 py-0.5 font-mono text-xs text-indigo-700">
+                                {{ dtype }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div>
+            <h3 class="text-sm font-semibold text-gray-600 mb-2">Missing Values</h3>
+            <table class="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-2 text-left font-medium text-gray-600">Column</th>
+                        <th class="px-4 py-2 text-right font-medium text-gray-600">Count</th>
+                        <th class="px-4 py-2 text-right font-medium text-gray-600">%</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    {% for col, count in analysis_result.missing_counts.items %}
+                    <tr>
+                        <td class="px-4 py-2.5 text-gray-800">{{ col }}</td>
+                        <td class="px-4 py-2.5 text-right
+                            {% if count > 0 %}text-amber-600 font-semibold{% else %}text-gray-400{% endif %}">
+                            {{ count }}
+                        </td>
+                        <td class="px-4 py-2.5 text-right
+                            {% if count > 0 %}text-amber-600{% else %}text-gray-400{% endif %}">
+                            {{ analysis_result.missing_pct|get_item:col }}%
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+</section>
+{% endif %}
+
+{# ── Pipeline steps ────────────────────────────────────────────────────────── #}
+<section class="mb-10">
+    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+        Pipeline Steps
+    </h2>
+    <div class="space-y-3">
+        {% for step in steps %}
+        <div class="rounded-lg border border-gray-200 p-4">
+            <div class="flex items-center justify-between mb-2">
+                <h3 class="font-semibold text-gray-800">{{ step.type }}</h3>
+                <div class="flex items-center gap-3">
+                    {% if step.duration %}
+                    <span class="text-xs text-gray-500">{{ step.duration|floatformat:2 }}s</span>
+                    {% endif %}
+                    <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold
+                        {% if step.status == 'Completed' %}bg-emerald-100 text-emerald-700
+                        {% elif step.status == 'Failed' %}bg-red-100 text-red-700
+                        {% else %}bg-gray-100 text-gray-600{% endif %}">
+                        {{ step.status }}
+                    </span>
+                </div>
+            </div>
+
+            {% if step.step_type == 'cleaning' and step.result %}
+            <div class="text-sm text-gray-600 space-y-0.5">
+                <p>Rows: {{ step.result.rows_before }} → {{ step.result.rows_after }}
+                   ({{ step.result.rows_removed }} removed,
+                   {{ step.result.cols_removed }} columns dropped)</p>
+                {% for action in step.result.actions %}
+                <p class="text-xs text-gray-500">
+                    ✓ {% if action.column %}{{ action.column }}: {% endif %}{{ action.action }}
+                    {% if action.missing_filled %}({{ action.missing_filled }} values filled){% endif %}
+                    {% if action.count %}({{ action.count }}){% endif %}
+                </p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {% if step.step_type == 'encoding' and step.result %}
+            <div class="text-sm text-gray-600 space-y-0.5">
+                {% if step.result.message %}
+                <p>{{ step.result.message }}</p>
+                {% else %}
+                {% for col_info in step.result.encoded_columns %}
+                <p class="text-xs text-gray-500">
+                    ✓ {{ col_info.column }} → {{ col_info.method }}
+                    {% if col_info.cardinality %}({{ col_info.cardinality }} unique values){% endif %}
+                </p>
+                {% endfor %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if step.step_type == 'scaling' and step.result %}
+            <div class="text-sm text-gray-600 space-y-0.5">
+                {% if step.result.message %}
+                <p>{{ step.result.message }}</p>
+                {% else %}
+                {% for col_info in step.result.scaled_columns %}
+                <p class="text-xs text-gray-500">
+                    ✓ {{ col_info.column }} → {{ col_info.scaler }}
+                </p>
+                {% endfor %}
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if step.step_type == 'statistical_tests' and step.result %}
+            <div class="text-sm text-gray-600">
+                {% if step.result.message %}
+                <p>{{ step.result.message }}</p>
+                {% else %}
+                <p class="text-xs text-gray-500">
+                    {{ step.result.tests|length }} column(s) tested for normality.
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            {% if step.step_type == 'model_training' and step.result %}
+            {% if step.result.error %}
+            <p class="text-sm text-red-600">{{ step.result.error }}</p>
+            {% else %}
+            <div class="text-sm text-gray-700 space-y-1">
+                <p><strong>Model:</strong> {{ step.result.model }}
+                   &nbsp;·&nbsp; <strong>Task:</strong> {{ step.result.task_type|title }}</p>
+                {% if step.result.metrics %}
+                <div class="flex flex-wrap gap-4 mt-1">
+                    {% for metric, value in step.result.metrics.items %}
+                    <span class="text-xs">
+                        <strong class="text-indigo-600">{{ metric|upper }}:</strong> {{ value }}
+                    </span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% if step.result.cross_validation %}
+                <p class="text-xs text-gray-500">
+                    {{ step.result.cross_validation.folds }}-fold CV
+                    ({{ step.result.cross_validation.scoring }}):
+                    {{ step.result.cross_validation.mean }}
+                    ± {{ step.result.cross_validation.std }}
+                </p>
+                {% endif %}
+            </div>
+            {% endif %}
+            {% endif %}
+
+        </div>
+        {% endfor %}
+    </div>
+</section>
+
+{# ── Model results ─────────────────────────────────────────────────────────── #}
+{% if model_result and not model_result.error %}
+<section class="mb-10">
+    <h2 class="text-lg font-bold text-gray-800 mb-4 pb-2 border-b border-gray-200">
+        Model Training Results
+    </h2>
+
+    <div class="grid grid-cols-2 gap-4 sm:grid-cols-4 mb-6">
+        {% for metric, value in model_result.metrics.items %}
+        <div class="rounded-lg bg-indigo-50 border border-indigo-100 p-4 text-center">
+            <p class="text-xs text-indigo-500 uppercase tracking-wide">{{ metric }}</p>
+            <p class="text-xl font-bold text-indigo-700 mt-1">{{ value }}</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if model_result.cross_validation %}
+    <div class="mb-6 rounded-lg bg-gray-50 border border-gray-200 px-5 py-4">
+        <p class="text-sm font-semibold text-gray-700">
+            {{ model_result.cross_validation.folds }}-fold Cross-Validation
+            ({{ model_result.cross_validation.scoring }})
+        </p>
+        <p class="text-xl font-bold text-gray-800 mt-1">
+            {{ model_result.cross_validation.mean }}
+            <span class="text-sm text-gray-500 font-normal">
+                ± {{ model_result.cross_validation.std }}
+            </span>
+        </p>
+    </div>
+    {% endif %}
+
+    {% if model_result.feature_importance %}
+    <div>
+        <h3 class="text-sm font-semibold text-gray-600 mb-3">
+            Feature Importance (top {{ model_result.feature_importance|length }})
+        </h3>
+        <div id="report-fi-chart" style="height:360px;"></div>
+    </div>
+    {% endif %}
+
+</section>
+{% endif %}
+
+{# ── Footer ────────────────────────────────────────────────────────────────── #}
+<footer class="mt-12 pt-4 border-t border-gray-200 text-center text-xs text-gray-400">
+    Generated by Data Analysis Platform
+    &nbsp;·&nbsp;
+    {{ generated_at|date:"N j, Y · g:i A" }}
+</footer>
+
+</div>
+
+{# Feature importance chart #}
+{% if model_result.feature_importance %}
+<script>
+(function () {
+    "use strict";
+    const fi = {{ feature_importance_json|safe }};
+    if (!fi || !fi.length) return;
+    const features    = fi.map(d => d.feature).reverse();
+    const importances = fi.map(d => d.importance).reverse();
+    Plotly.newPlot("report-fi-chart", [{
+        type: "bar", orientation: "h",
+        x: importances, y: features,
+        marker: { color: "#4f46e5", opacity: 0.8 },
+        hovertemplate: "<b>%{y}</b><br>Importance: %{x:.4f}<extra></extra>",
+    }], {
+        paper_bgcolor: "white", plot_bgcolor: "white",
+        font: { color: "#374151", size: 12 },
+        xaxis: { gridcolor: "#e5e7eb", title: { text: "Importance" } },
+        yaxis: { automargin: true },
+        margin: { l: 10, r: 20, t: 10, b: 50 },
+    }, { responsive: true, displayModeBar: false });
+})();
+</script>
+{% endif %}
+
+</body>
+</html>

@@ -38,6 +38,7 @@
                 <th class="px-6 py-3 text-right font-medium text-gray-400">Rows</th>
                 <th class="px-6 py-3 text-right font-medium text-gray-400">Columns</th>
                 <th class="px-6 py-3 text-left font-medium text-gray-400">Uploaded</th>
+                <th class="px-6 py-3 text-left font-medium text-gray-400">Pipelines</th>
                 <th class="px-6 py-3"></th>
             </tr>
         </thead>
@@ -82,6 +83,22 @@
                 {# Timestamp #}
                 <td class="px-6 py-4 text-gray-500">
                     {{ ds.created_at|date:"N j, Y · g:i A" }}
+                </td>
+
+                <td class="px-6 py-4 text-gray-400">
+                    {% with count=ds.pipelines.count %}
+                    {% if count %}
+                    <a href="{% url 'analysis:pipeline_create' dataset_pk=ds.pk %}"
+                    class="text-sm text-gray-400 hover:text-indigo-400 transition">
+                        {{ count }} run{{ count|pluralize }}
+                    </a>
+                    {% else %}
+                    <a href="{% url 'analysis:pipeline_create' dataset_pk=ds.pk %}"
+                    class="text-xs text-gray-600 hover:text-indigo-400 transition">
+                        + Run pipeline
+                    </a>
+                    {% endif %}
+                    {% endwith %}
                 </td>
 
                 {# Action #}

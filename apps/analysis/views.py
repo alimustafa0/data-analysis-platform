@@ -108,7 +108,7 @@ def result(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
 @require_http_methods(["GET"])
 def dataset_list(request: HttpRequest) -> HttpResponse:
     """Render a history of all uploaded datasets."""
-    datasets = Dataset.objects.all()  # Already ordered by -created_at via Meta.
+    datasets = Dataset.objects.prefetch_related("pipelines").all()
     return render(request, "analysis/list.html", {"datasets": datasets})
 
 @require_http_methods(["GET"])
@@ -331,7 +331,6 @@ def pipeline_status(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
         AnalysisPipeline.Status.RUNNING,
     )
 
-    # Extract feature importance for the Plotly chart.
     model_step = steps.filter(
         step_type=PipelineStep.StepType.MODEL_TRAINING,
         status=PipelineStep.Status.COMPLETED,
@@ -343,20 +342,31 @@ def pipeline_status(request: HttpRequest, pk: uuid.UUID) -> HttpResponse:
 
     if model_step and model_step.result:
         feature_importance = model_step.result.get("feature_importance", [])
-        model_metrics = model_step.result.get("metrics", {})
-        cv_result = model_step.result.get("cross_validation", {})
+        model_metrics      = model_step.result.get("metrics", {})
+        cv_result          = model_step.result.get("cross_validation", {})
+
+    # Report URL — served directly from media storage.
+    report_step = steps.filter(
+        step_type=PipelineStep.StepType.REPORT,
+        status=PipelineStep.Status.COMPLETED,
+    ).first()
+
+    report_url: str | None = None
+    if report_step and report_step.result.get("report_file"):
+        report_url = settings.MEDIA_URL + report_step.result["report_file"]
 
     return render(
         request,
         "analysis/pipeline_status.html",
         {
-            "pipeline": pipeline,
-            "steps": steps,
-            "auto_refresh": auto_refresh,
+            "pipeline":           pipeline,
+            "steps":              steps,
+            "auto_refresh":       auto_refresh,
             "feature_importance": feature_importance,
-            "model_metrics": model_metrics,
-            "cv_result": cv_result,
-            "has_model": model_step is not None,
+            "model_metrics":      model_metrics,
+            "cv_result":          cv_result,
+            "has_model":          model_step is not None,
+            "report_url":         report_url,
         },
     )
 
