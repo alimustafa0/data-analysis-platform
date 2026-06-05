@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}404 — Page Not Found{% endblock %}
+
+{% block content %}
+<div class="flex flex-col items-center justify-center py-32 text-center">
+    <p class="text-8xl font-bold text-gray-800 select-none">404</p>
+    <h1 class="mt-4 text-2xl font-bold text-white">Page not found</h1>
+    <p class="mt-3 max-w-sm text-gray-500">
+        The page you're looking for doesn't exist or has been moved.
+    </p>
+    <div class="mt-8 flex items-center gap-4">
+        <a href="/"
+           class="rounded-xl bg-indigo-600 px-6 py-2.5 text-sm font-semibold text-white hover:bg-indigo-500 transition">
+            Go home
+        </a>
+        <a href="{% url 'analysis:upload' %}"
+           class="text-sm text-gray-400 hover:text-white transition">
+            Upload a dataset →
+        </a>
+    </div>
+</div>
+{% endblock %}
