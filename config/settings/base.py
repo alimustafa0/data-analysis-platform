@@ -40,6 +40,7 @@ THIRD_PARTY_APPS: list[str] = []  # Populated per phase (HTMX, Celery, etc.)
 LOCAL_APPS: list[str] = [
     "apps.core",
     "apps.analysis",
+    "django_celery_results",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -106,3 +107,15 @@ MEDIA_ROOT: Path = BASE_DIR / "media"
 
 # ─── Default primary key ──────────────────────────────────────────────────────
 DEFAULT_AUTO_FIELD: str = "django.db.models.BigAutoField"
+
+# ─── Celery ───────────────────────────────────────────────────────────────────
+# The broker transports task messages. The result backend persists task
+# state and return values so the UI can poll for completion.
+CELERY_BROKER_URL: str = env("CELERY_BROKER_URL", default="redis://localhost:6379/0")
+CELERY_RESULT_BACKEND: str = env("CELERY_RESULT_BACKEND", default="django-db")
+CELERY_ACCEPT_CONTENT: list[str] = ["json"]
+CELERY_TASK_SERIALIZER: str = "json"
+CELERY_RESULT_SERIALIZER: str = "json"
+CELERY_TIMEZONE: str = TIME_ZONE
+CELERY_TASK_TRACK_STARTED: bool = True
+CELERY_TASK_TIME_LIMIT: int = 30 * 60   # 30-minute hard kill for runaway tasks.

@@ -1,9 +1,5 @@
 """
 Views for the analysis app.
-
-Each view has exactly one responsibility. The upload view accepts a file,
-validates it, persists the record, and redirects — nothing more. Analysis
-logic lives in the processing engine (Phase 5), not here.
 """
 
 from django.http import HttpRequest, HttpResponse
@@ -12,16 +8,14 @@ from django.views.decorators.http import require_http_methods
 
 from .forms import DatasetUploadForm
 from .models import Dataset
+from .tasks import process_dataset
 
 
 @require_http_methods(["GET", "POST"])
 def upload(request: HttpRequest) -> HttpResponse:
     """
     GET  — render the upload form.
-    POST — validate, save the file, redirect to a detail page (Phase 5).
-
-    Using @require_http_methods rejects PUT/DELETE/PATCH at the decorator
-    level before any view logic runs — cheap, explicit method enforcement.
+    POST — validate, save, dispatch background task, redirect.
     """
     if request.method == "POST":
         form = DatasetUploadForm(request.POST, request.FILES)
@@ -32,16 +26,14 @@ def upload(request: HttpRequest) -> HttpResponse:
                 original_filename=uploaded_file.name,
                 file_size_bytes=uploaded_file.size,
             )
-            # Save without committing to DB first so the upload path
-            # callable receives the UUID primary key correctly.
-            dataset.pk = dataset.id  # uuid4 already set by default
             dataset.file = uploaded_file
             dataset.save()
 
-            # Placeholder redirect — wired to the detail view in Phase 5.
+            # Dispatch to Celery — returns immediately, never blocks the view.
+            process_dataset.delay(str(dataset.pk))
+
             return redirect("analysis:upload")
 
-        # Form invalid — fall through and re-render with errors.
     else:
         form = DatasetUploadForm()
 
