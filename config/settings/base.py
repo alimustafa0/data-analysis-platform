@@ -37,8 +37,9 @@ DJANGO_APPS: list[str] = [
     "django.contrib.staticfiles",
 ]
 THIRD_PARTY_APPS: list[str] = []  # Populated per phase (HTMX, Celery, etc.)
-LOCAL_APPS: list[str] = [                       # Our own apps — added in Phase 3 onward.
+LOCAL_APPS: list[str] = [
     "apps.core",
+    "apps.analysis",
 ]
 
 INSTALLED_APPS: list[str] = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
